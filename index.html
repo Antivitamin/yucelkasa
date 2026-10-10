@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kasa, Cari & Ajanda Portalı</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- ==================== GİRİŞ EKRANI ==================== -->
+  <div id="authScreen" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6">
+      
+      <div class="text-center space-y-2">
+        <div class="h-14 w-14 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
+        </div>
+        <h2 class="text-xl font-bold tracking-tight text-white">Yönetici Girişi</h2>
+        <p class="text-xs text-slate-400">Veritabanına erişmek için bilgilerinizi girin</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Kullanıcı Adı</label>
+          <input type="text" id="loginUsername" required placeholder="admin" value="admin"
+                 class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Giriş Şifresi</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••" value="123456"
+                 class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Güvenlik PIN Kodu (4 Hane)</label>
+          <input type="password" id="loginPin" maxlength="4" required placeholder="1234" value="1234"
+                 class="w-full text-center tracking-widest bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-400 pt-1">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="rememberMe" checked class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0">
+            <span>Beni Hatırla (Oturumu Açık Tut)</span>
+          </label>
+        </div>
+
+        <p id="authErrorMsg" class="text-xs text-rose-400 hidden"><i class="fa-solid fa-circle-exclamation mr-1"></i><span></span></p>
+
+        <button type="submit" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-600/30 flex justify-center items-center gap-2">
+          <span>Güvenli Giriş Yap</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== ANA YÖNETİM PANELİ ==================== -->
+  <div id="mainDashboard" class="hidden min-h-screen flex flex-col">
+
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-30 px-4 lg:px-8 py-3.5 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
+          <i class="fa-solid fa-cloud text-white text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-semibold leading-tight">Kasa, Cari & Takip</h1>
+          <p class="text-xs text-slate-400">Aktif Kullanıcı: <span id="userBadge" class="text-indigo-400 font-semibold">admin</span></p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <button onclick="exportFullDatabaseBackup()" title="Tüm Veritabanını İndir" class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Yedek Al</span>
+        </button>
+        <button onclick="document.getElementById('dbRestoreFileInput').click()" title="Yedek Dosyası Yükle" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-400 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-upload"></i> <span class="hidden sm:inline">Yedek Yükle</span>
+        </button>
+        <input type="file" id="dbRestoreFileInput" accept=".json" class="hidden" onchange="importFullDatabaseBackup(event)">
+
+        <button onclick="openManageAccountsModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-vault"></i> <span>Kasa & Bankalar</span>
+        </button>
+        <button onclick="openManageContactsModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-users"></i> <span>Cariler / Masraflar</span>
+        </button>
+        <button onclick="openPasswordChangeModal()" title="Şifre Değiştir" class="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-key"></i> <span class="hidden sm:inline">Şifre</span>
+        </button>
+        <button onclick="loadAllData()" title="Yenile" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl border border-slate-700 transition">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+        <button onclick="handleLogout()" title="Çıkış Yap" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-xl border border-rose-500/20 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
+
+      <!-- ==================== ÜST BLOK: BAŞLIKLI & MADDELİ NOT DEFTERİ AJANDASI ==================== -->
+      <section class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-amber-500/30 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <i class="fa-solid fa-book text-sm"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                Not Defteri & Maddeli Ajanda
+                <span id="notebooksCountBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">0 Başlık</span>
+              </h2>
+              <p class="text-[11px] text-slate-400">Başlık açın, altına 1. 2. 3. maddeler halinde telefon, fatura ve yapılacakları girin</p>
+            </div>
+          </div>
+          <button onclick="toggleNotebookForm()" class="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 font-medium">
+            <i class="fa-solid fa-plus"></i> <span>Yeni Not Başlığı Aç</span>
+          </button>
+        </div>
+
+        <!-- Yeni Başlık Açma Formu -->
+        <form id="notebookAddForm" class="hidden mt-4 p-4 bg-slate-950 border border-slate-800 rounded-2xl flex flex-col sm:flex-row gap-2 items-center">
+          <div class="flex-1 w-full">
+            <input type="text" id="newNotebookTitle" required placeholder="Not Başlığı (Örn: Mehmet Bey İletişim & Fatura Takibi, Ekim Ayı Masrafları)"
+                   class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+          </div>
+          <div class="flex gap-2 w-full sm:w-auto justify-end">
+            <button type="button" onclick="toggleNotebookForm()" class="px-3 py-2 rounded-xl text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition">İptal</button>
+            <button type="submit" class="px-4 py-2 rounded-xl text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium transition shadow-md shadow-amber-600/20">Başlığı Aç</button>
+          </div>
+        </form>
+
+        <!-- Not Defteri Başlıkları ve Maddeleri Grid Alanı -->
+        <div id="notebooksGrid" class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-80 overflow-y-auto pr-1">
+          <!-- Başlıklar ve Maddeler Dinamik Olarak Buraya Gelir -->
+        </div>
+      </section>
+
+      <!-- 1. Bakiye & Kasa Durumu -->
+      <section class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-12 gap-4">
+        <div class="md:col-span-1 lg:col-span-3 p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-400 uppercase tracking-wider">Toplam Likit Bakiye</div>
+            <div class="text-2xl font-bold mt-2 text-white tracking-tight" id="totalBalanceDisplay">₺0,00</div>
+          </div>
+          <div class="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-800/80">
+            Tüm kasa ve bankaların anlık net toplamı
+          </div>
+        </div>
+
+        <div class="md:col-span-2 lg:col-span-3 p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-2">
+          <div>
+            <div class="text-xs font-medium text-slate-400 uppercase tracking-wider">Filtrelenen Dönem</div>
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-xs text-slate-400">Toplam Giriş:</span>
+              <span class="text-base font-bold text-emerald-400" id="totalInDisplay">+₺0,00</span>
+            </div>
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-xs text-slate-400">Toplam Çıkış:</span>
+              <span class="text-base font-bold text-rose-400" id="totalOutDisplay">-₺0,00</span>
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 pt-2 border-t border-slate-800/80">
+            Tabloda görüntülenen hareketlerin toplamı
+          </div>
+        </div>
+
+        <div class="md:col-span-3 lg:col-span-6 p-5 rounded-2xl bg-slate-900 border border-indigo-500/20 flex flex-col justify-between shadow-sm">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-wallet text-indigo-400 text-sm"></i>
+              <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Kasa & Banka Bakiyeleri</span>
+            </div>
+            <button onclick="openManageAccountsModal()" class="text-[11px] bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-lg transition font-medium">
+              + Yeni Kasa Ekle / Yönet
+            </button>
+          </div>
+          <div id="accountsBalanceOverview" class="mt-3 space-y-2 max-h-36 overflow-y-auto pr-1"></div>
+        </div>
+      </section>
+
+      <!-- 2. Form Alanı: Hareket & Harcama Girişi -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <h2 class="text-base font-semibold mb-4 flex items-center gap-2 text-slate-200">
+          <i class="fa-solid fa-arrow-right-arrow-left text-violet-400"></i> Yeni Hareket & Harcama Girişi
+        </h2>
+        <form id="txForm" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">İşlem Türü</label>
+              <select id="txType" onchange="handleTxTypeChange()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-200">
+                <option value="out">Nakit Çıkışı / Harcama (-)</option>
+                <option value="in">Nakit Girişi / Tahsilat (+)</option>
+                <option value="transfer">Kasalar Arası Virman</option>
+                <option value="rollover">Devir / Düzeltme (+)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1" id="txAccountLabel">Hangi Kasa / Banka?</label>
+              <select id="txAccount" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-200"></select>
+            </div>
+            <div id="txContactDiv">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Kişi / Masraf Merkezi</label>
+              <select id="txContact" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-200">
+                <option value="">Genel (Tanımsız)</option>
+              </select>
+            </div>
+            <div id="txTargetAccountDiv" class="hidden">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Hedef Kasa / Banka</label>
+              <select id="txTargetAccount" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-200"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Tutar (₺)</label>
+              <input type="number" step="0.01" id="txAmount" required placeholder="0.00"
+                     class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-600 font-semibold">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">İşlem Tarihi</label>
+              <input type="date" id="txDate" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-100">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Açıklama</label>
+              <input type="text" id="txDesc" required placeholder="Örn: Malzeme tedariği, Fatura ödemesi vb."
+                     class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-600">
+            </div>
+            <div>
+              <button type="submit" class="w-full bg-violet-600 hover:bg-violet-500 text-white font-medium py-2.5 px-6 rounded-xl text-sm transition shadow-lg shadow-violet-600/20">
+                <i class="fa-solid fa-check mr-1.5"></i> İşlemi Kaydet
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- 3. Raporlama Tablosu -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <div class="p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-base font-semibold text-slate-200">Hareket & Cari Raporu</h2>
+            <p class="text-xs text-slate-400">Başlıklara tıklayarak sıralayabilir, Excel çıktısı alabilirsiniz.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input type="date" id="filterStart" class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-indigo-500">
+            <span class="text-slate-500 text-xs">-</span>
+            <input type="date" id="filterEnd" class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-indigo-500">
+            
+            <select id="filterAccount" class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-indigo-500">
+              <option value="all">Tüm Kasalar / Bankalar</option>
+            </select>
+
+            <select id="filterContact" class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-indigo-500">
+              <option value="all">Tüm Kişiler / Masraflar</option>
+            </select>
+
+            <button onclick="applyFilters()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-3.5 py-2 rounded-lg border border-slate-700 transition">
+              <i class="fa-solid fa-filter mr-1"></i> Filtrele
+            </button>
+            <button onclick="clearFilters()" class="bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-medium px-3.5 py-2 rounded-lg border border-slate-700 transition" title="Filtreyi Temizle">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20">
+              <i class="fa-solid fa-file-excel"></i> Excel İndir
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800 select-none">
+              <tr>
+                <th onclick="sortTable('date')" class="px-5 py-3.5 cursor-pointer hover:text-indigo-400 transition">
+                  Tarih <span id="sortIcon_date" class="ml-1 text-[10px]"><i class="fa-solid fa-sort-down text-indigo-400"></i></span>
+                </th>
+                <th onclick="sortTable('account')" class="px-5 py-3.5 cursor-pointer hover:text-indigo-400 transition">
+                  Kasa / Banka <span id="sortIcon_account" class="ml-1 text-[10px]"><i class="fa-solid fa-sort"></i></span>
+                </th>
+                <th onclick="sortTable('contact')" class="px-5 py-3.5 cursor-pointer hover:text-indigo-400 transition">
+                  Kişi / Masraf <span id="sortIcon_contact" class="ml-1 text-[10px]"><i class="fa-solid fa-sort"></i></span>
+                </th>
+                <th class="px-5 py-3.5">Tür</th>
+                <th onclick="sortTable('desc')" class="px-5 py-3.5 cursor-pointer hover:text-indigo-400 transition">
+                  Açıklama <span id="sortIcon_desc" class="ml-1 text-[10px]"><i class="fa-solid fa-sort"></i></span>
+                </th>
+                <th onclick="sortTable('amount')" class="px-5 py-3.5 text-right cursor-pointer hover:text-indigo-400 transition">
+                  Tutar <span id="sortIcon_amount" class="ml-1 text-[10px]"><i class="fa-solid fa-sort"></i></span>
+                </th>
+                <th class="px-5 py-3.5 text-center">İşlem</th>
+              </tr>
+            </thead>
+            <tbody id="txTableBody" class="divide-y divide-slate-800/60 font-normal"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: HAREKET DÜZENLE -->
+  <div id="editModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-base font-semibold text-slate-200">İşlemi Düzenle</h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <form id="editForm" class="space-y-4">
+        <input type="hidden" id="editTxId">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Hesap</label>
+            <select id="editAccount" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Kişi / Masraf</label>
+            <select id="editContact" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200">
+              <option value="">Genel (Tanımsız)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">İşlem Türü</label>
+            <select id="editType" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200">
+              <option value="out">Nakit Çıkışı (-)</option>
+              <option value="in">Nakit Girişi (+)</option>
+              <option value="rollover">Devir / Düzeltme (+)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Tutar (₺)</label>
+            <input type="number" step="0.01" id="editAmount" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Tarih</label>
+          <input type="date" id="editDate" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Açıklama</label>
+          <input type="text" id="editDesc" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeEditModal()" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">İptal</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition">Güncelle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: KASA & BANKALARI YÖNET -->
+  <div id="manageAccountsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-semibold text-slate-200">Kasa & Banka Yönetimi</h3>
+          <p class="text-xs text-slate-400">Yeni hesap ekleyin veya mevcudu düzenleyin</p>
+        </div>
+        <button onclick="closeManageAccountsModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+
+      <form id="modalAccountAddForm" class="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+        <div class="text-xs font-semibold text-indigo-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-plus-circle"></i> Yeni Kasa / Banka Tanımla
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="sm:col-span-1">
+            <input type="text" id="modalAccName" required placeholder="Hesap Adı"
+                   class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <select id="modalAccType" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="bank">Banka Hesabı</option>
+              <option value="cash">Nakit Kasa</option>
+            </select>
+          </div>
+          <div>
+            <input type="number" step="0.01" id="modalAccInitial" placeholder="Devir (0.00)"
+                   class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-xl transition font-medium">
+            Kasayı Ekle
+          </button>
+        </div>
+      </form>
+
+      <div class="space-y-2">
+        <div class="text-xs font-medium text-slate-400">Tanımlı Kasalar & Bankalar:</div>
+        <div id="accountsList" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-800/80">
+        <button onclick="closeManageAccountsModal()" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CARİ / MASRAF MERKEZİ YÖNETİMİ -->
+  <div id="manageContactsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-semibold text-slate-200">Cari & Masraf Merkezleri</h3>
+          <p class="text-xs text-slate-400">Ad değiştirildiğinde geçmiş hareketler korunur</p>
+        </div>
+        <button onclick="closeManageContactsModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+
+      <form id="contactForm" class="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+        <div class="text-xs font-semibold text-indigo-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-user-plus"></i> Yeni Kişi / Masraf Merkezi Ekle
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="contactName" required placeholder="Örn: Ahmet Yılmaz, Araç Bakım vb."
+                 class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+          <select id="contactType" class="bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+            <option value="person">Personel / Şahıs</option>
+            <option value="expense">Masraf Merkezi</option>
+            <option value="supplier">Firma / Tedarikçi</option>
+          </select>
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-xl transition font-medium">
+            Ekle
+          </button>
+        </div>
+      </form>
+
+      <div class="space-y-2">
+        <div class="text-xs font-medium text-slate-400">Kayıtlı Cariler & Masraflar:</div>
+        <div id="contactsList" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-800/80">
+        <button onclick="closeManageContactsModal()" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: KULLANICI ŞİFRE DEĞİŞTİRME -->
+  <div id="passwordChangeModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <i class="fa-solid fa-key text-sm"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-slate-100">Şifre & Güvenlik Değiştir</h3>
+            <p class="text-xs text-slate-400">Giriş şifrenizi veya PIN kodunuzu güncelleyin</p>
+          </div>
+        </div>
+        <button onclick="closePasswordChangeModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+
+      <form id="userPasswordForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Mevcut Şifreniz</label>
+          <input type="password" id="currentPassInput" required placeholder="Eski şifrenizi girin"
+                 class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="pt-2 border-t border-slate-800/60 space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Yeni Şifre</label>
+            <input type="password" id="newPassInput" required placeholder="Yeni şifrenizi girin"
+                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Yeni Şifre (Tekrar)</label>
+            <input type="password" id="confirmPassInput" required placeholder="Yeni şifrenizi tekrar yazın"
+                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800/60">
+          <label class="block text-xs font-medium text-slate-300 mb-1">4 Haneli Güvenlik PIN Kodu</label>
+          <input type="password" id="updatePinInput" maxlength="4" placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                 class="w-full text-center tracking-widest bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <p id="pwdChangeError" class="text-xs text-rose-400 hidden"><i class="fa-solid fa-circle-exclamation mr-1"></i><span></span></p>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closePasswordChangeModal()" class="px-4 py-2.5 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">İptal</button>
+          <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-medium bg-amber-600 hover:bg-amber-500 text-white transition flex items-center gap-1.5 shadow-lg shadow-amber-600/20">
+            <i class="fa-solid fa-check"></i> <span>Şifreyi Güncelle</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://xjddsifituufqhmhzatd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_rZJMUh4J2GClOk64mG2dIw_h6Iuni7D";
+
+    const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentUser = null;
+    let accounts = [];
+    let contacts = [];
+    let transactions = [];
+    let notebooks = [];
+    let noteItems = [];
+    let currentVisibleTransactions = [];
+
+    let currentSortColumn = 'date';
+    let currentSortAsc = false;
+
+    document.getElementById('txDate').valueAsDate = new Date();
+
+    function formatCurrency(num) {
+      return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(num || 0);
+    }
+
+    // ==================== OTURUM & GİRİŞ KONTROLÜ ====================
+    function checkSavedSession() {
+      const savedUserStr = localStorage.getItem('kp_current_user') || sessionStorage.getItem('kp_current_user');
+      if (savedUserStr) {
+        try {
+          currentUser = JSON.parse(savedUserStr);
+          onAuthSuccess(currentUser);
+          return;
+        } catch(e) {}
+      }
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('mainDashboard').classList.add('hidden');
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      const enteredPin = document.getElementById('loginPin').value.trim();
+      const remember = document.getElementById('rememberMe').checked;
+      const errorMsg = document.getElementById('authErrorMsg');
+
+      errorMsg.classList.add('hidden');
+
+      const { data: user, error } = await sbClient
+        .from('app_users')
+        .select('*')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (error || !user) {
+        errorMsg.querySelector('span').innerText = 'Kullanıcı bulunamadı veya bağlantı hatası!';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      if (user.password !== password) {
+        errorMsg.querySelector('span').innerText = 'Hatalı şifre girdiniz!';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      if (user.pin_code && user.pin_code !== enteredPin) {
+        errorMsg.querySelector('span').innerText = 'Hatalı Güvenlik PIN Kodu!';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      currentUser = user;
+      if (remember) {
+        localStorage.setItem('kp_current_user', JSON.stringify(user));
+      } else {
+        sessionStorage.setItem('kp_current_user', JSON.stringify(user));
+      }
+
+      onAuthSuccess(user);
+    });
+
+    function onAuthSuccess(user) {
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('mainDashboard').classList.remove('hidden');
+      document.getElementById('userBadge').innerText = user.username;
+      loadAllData();
+    }
+
+    function handleLogout() {
+      if (confirm('Oturumu kapatmak istediğinize emin misiniz?')) {
+        localStorage.removeItem('kp_current_user');
+        sessionStorage.removeItem('kp_current_user');
+        currentUser = null;
+        document.getElementById('mainDashboard').classList.add('hidden');
+        document.getElementById('authScreen').classList.remove('hidden');
+      }
+    }
+
+    // ==================== YENİLENEN NOT DEFTERİ: BAŞLIKLI & MADDELİ AJANDA ====================
+    function toggleNotebookForm() {
+      const f = document.getElementById('notebookAddForm');
+      f.classList.toggle('hidden');
+      if (!f.classList.contains('hidden')) {
+        document.getElementById('newNotebookTitle').focus();
+      }
+    }
+
+    // Yeni Not Başlığı Açma
+    document.getElementById('notebookAddForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const title = document.getElementById('newNotebookTitle').value.trim();
+
+      const { error } = await sbClient.from('note_notebooks').insert([{ title }]);
+      if (error) {
+        alert("Başlık açılırken hata: " + error.message);
+      } else {
+        this.reset();
+        toggleNotebookForm();
+        loadNotebooks();
+      }
+    });
+
+    // Not Defteri ve Maddelerini Çekme
+    async function loadNotebooks() {
+      const { data: nbData } = await sbClient.from('note_notebooks').select('*').order('id', { ascending: false });
+      const { data: itemData } = await sbClient.from('note_items').select('*').order('item_order', { ascending: true }).order('id', { ascending: true });
+
+      notebooks = nbData || [];
+      noteItems = itemData || [];
+
+      renderNotebooksGrid();
+    }
+
+    // Not Defteri Kartlarını Ekrana Basma
+    function renderNotebooksGrid() {
+      const grid = document.getElementById('notebooksGrid');
+      const countBadge = document.getElementById('notebooksCountBadge');
+      grid.innerHTML = '';
+      countBadge.innerText = `${notebooks.length} Başlık`;
+
+      if (notebooks.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full p-6 rounded-2xl bg-slate-950/40 border border-dashed border-slate-800 text-center text-xs text-slate-500">
+            Henüz oluşturulmuş bir not başlığı bulunmuyor. Yukarıdaki <strong>"Yeni Not Başlığı Aç"</strong> butonuna tıklayarak ilk başlığınızı oluşturabilirsiniz.
+          </div>
+        `;
+        return;
+      }
+
+      notebooks.forEach(nb => {
+        const items = noteItems.filter(it => it.notebook_id === nb.id);
+        
+        const card = document.createElement('div');
+        card.className = "p-4 rounded-2xl bg-slate-950 border border-slate-800/90 shadow-md flex flex-col justify-between space-y-3";
+        
+        let itemsHtml = '';
+        if (items.length === 0) {
+          itemsHtml = `<p class="text-[11px] text-slate-600 italic py-1">Henüz madde eklenmemiş.</p>`;
+        } else {
+          itemsHtml = '<div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">';
+          items.forEach((item, idx) => {
+            const completedClass = item.is_completed ? 'line-through text-slate-500' : 'text-slate-200';
+            itemsHtml += `
+              <div class="flex items-start justify-between gap-2 p-1.5 rounded-lg bg-slate-900/60 border border-slate-800/50 text-xs">
+                <div class="flex items-start gap-2 min-w-0">
+                  <span class="text-amber-400 font-bold text-[11px] select-none">${idx + 1}.</span>
+                  <span class="break-words ${completedClass}">${item.content}</span>
+                </div>
+                <div class="flex items-center gap-1 shrink-0 pt-0.5">
+                  <button onclick="toggleItemComplete(${item.id}, ${!item.is_completed})" title="${item.is_completed ? 'Geri Al' : 'Tamamlandı Olarak İşaretle'}" class="text-[11px] text-slate-400 hover:text-emerald-400 p-0.5">
+                    <i class="fa-solid ${item.is_completed ? 'fa-rotate-left' : 'fa-check'}"></i>
+                  </button>
+                  <button onclick="deleteItem(${item.id})" title="Maddeyi Sil" class="text-[11px] text-slate-500 hover:text-rose-400 p-0.5">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+          itemsHtml += '</div>';
+        }
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+              <h3 class="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate" title="${nb.title}">
+                <i class="fa-solid fa-bookmark text-amber-400 text-[10px]"></i> ${nb.title}
+              </h3>
+              <div class="flex items-center gap-1 shrink-0">
+                <button onclick="renameNotebook(${nb.id})" title="Başlığı Değiştir" class="text-[11px] text-slate-400 hover:text-indigo-400 p-1">
+                  <i class="fa-solid fa-pen"></i>
+                </button>
+                <button onclick="deleteNotebook(${nb.id})" title="Başlığı ve Maddeleri Sil" class="text-[11px] text-slate-400 hover:text-rose-400 p-1">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Maddeler Listesi -->
+            <div class="mt-2.5">
+              ${itemsHtml}
+            </div>
+          </div>
+
+          <!-- Yeni Madde Ekleme Kutusu -->
+          <form onsubmit="handleAddItem(event, ${nb.id})" class="pt-2 border-t border-slate-800/80 flex gap-1.5">
+            <input type="text" id="addItemInput_${nb.id}" required placeholder="${items.length + 1}. Maddeyi yazın..."
+                   class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-100 focus:outline-none focus:border-amber-500">
+            <button type="submit" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition">
+              Ekle
+            </button>
+          </form>
+        `;
+
+        grid.appendChild(card);
+      });
+    }
+
+    // Başlık altına yeni madde ekleme
+    async function handleAddItem(e, notebookId) {
+      e.preventDefault();
+      const input = document.getElementById(`addItemInput_${notebookId}`);
+      const content = input.value.trim();
+      if (!content) return;
+
+      const existingItems = noteItems.filter(it => it.notebook_id === notebookId);
+      const nextOrder = existingItems.length + 1;
+
+      const { error } = await sbClient.from('note_items').insert([{
+        notebook_id: notebookId,
+        content: content,
+        item_order: nextOrder,
+        is_completed: false
+      }]);
+
+      if (error) {
+        alert("Madde eklenemedi: " + error.message);
+      } else {
+        input.value = '';
+        loadNotebooks();
+      }
+    }
+
+    async function toggleItemComplete(itemId, status) {
+      await sbClient.from('note_items').update({ is_completed: status }).eq('id', itemId);
+      loadNotebooks();
+    }
+
+    async function deleteItem(itemId) {
+      await sbClient.from('note_items').delete().eq('id', itemId);
+      loadNotebooks();
+    }
+
+    async function renameNotebook(id) {
+      const nb = notebooks.find(n => n.id === id);
+      if (!nb) return;
+      const newTitle = prompt('Yeni başlık adını girin:', nb.title);
+      if (newTitle && newTitle.trim() !== '') {
+        await sbClient.from('note_notebooks').update({ title: newTitle.trim() }).eq('id', id);
+        loadNotebooks();
+      }
+    }
+
+    async function deleteNotebook(id) {
+      if (confirm('Bu başlığı ve altındaki tüm maddeleri silmek istediğinize emin misiniz?')) {
+        await sbClient.from('note_notebooks').delete().eq('id', id);
+        loadNotebooks();
+      }
+    }
+
+    // ==================== VERİTABANI YEDEK ALMA & GERİ YÜKLEME ====================
+    async function exportFullDatabaseBackup() {
+      const { data: appUsers } = await sbClient.from('app_users').select('*');
+      const { data: dbAccounts } = await sbClient.from('accounts').select('*');
+      const { data: dbContacts } = await sbClient.from('contacts').select('*');
+      const { data: dbTransactions } = await sbClient.from('transactions').select('*');
+      const { data: dbNotebooks } = await sbClient.from('note_notebooks').select('*');
+      const { data: dbItems } = await sbClient.from('note_items').select('*');
+
+      const fullBackup = {
+        app: 'KasaPort',
+        version: '3.0',
+        exported_at: new Date().toISOString(),
+        tables: {
+          app_users: appUsers || [],
+          accounts: dbAccounts || [],
+          contacts: dbContacts || [],
+          transactions: dbTransactions || [],
+          note_notebooks: dbNotebooks || [],
+          note_items: dbItems || []
+        }
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullBackup, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `kasa_tam_yedek_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      alert('Tüm veritabanı yedeği bilgisayarınıza indirildi!');
+    }
+
+    function importFullDatabaseBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!parsed.tables || !parsed.tables.transactions) {
+            alert('Geçersiz yedek dosyası formatı!');
+            return;
+          }
+
+          if (confirm('Yedek dosyasındaki veriler mevcut veritabanına aktarılacak. Onaylıyor musunuz?')) {
+            const t = parsed.tables;
+
+            if (t.accounts && t.accounts.length > 0) await sbClient.from('accounts').upsert(t.accounts);
+            if (t.contacts && t.contacts.length > 0) await sbClient.from('contacts').upsert(t.contacts);
+            if (t.transactions && t.transactions.length > 0) await sbClient.from('transactions').upsert(t.transactions);
+            if (t.note_notebooks && t.note_notebooks.length > 0) await sbClient.from('note_notebooks').upsert(t.note_notebooks);
+            if (t.note_items && t.note_items.length > 0) await sbClient.from('note_items').upsert(t.note_items);
+
+            alert('Yedek başarıyla içeri aktarıldı!');
+            loadAllData();
+          }
+        } catch (err) {
+          alert('Hata oluştu: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    // ==================== VERİLERİ YÜKLEME ====================
+    async function loadAllData() {
+      const { data: accData } = await sbClient.from('accounts').select('*').order('id');
+      const { data: conData } = await sbClient.from('contacts').select('*').order('name');
+      const { data: txData } = await sbClient.from('transactions').select('*').order('date', { ascending: false }).order('id', { ascending: false });
+
+      accounts = accData || [];
+      contacts = conData || [];
+      transactions = txData || [];
+
+      accounts.forEach(acc => {
+        let bal = 0;
+        transactions.filter(t => t.account_id === acc.id).forEach(t => {
+          if (t.type === 'out') bal -= parseFloat(t.amount);
+          else bal += parseFloat(t.amount);
+        });
+        acc.computedBalance = bal;
+      });
+
+      renderDropdowns();
+      renderSummary();
+      applyFilters();
+      loadNotebooks();
+    }
+
+    function renderDropdowns() {
+      const selectTx = document.getElementById('txAccount');
+      const targetSelect = document.getElementById('txTargetAccount');
+      const filterAcc = document.getElementById('filterAccount');
+      const editAccount = document.getElementById('editAccount');
+      
+      selectTx.innerHTML = '';
+      targetSelect.innerHTML = '';
+      editAccount.innerHTML = '';
+      filterAcc.innerHTML = '<option value="all">Tüm Kasalar / Bankalar</option>';
+
+      accounts.forEach(acc => {
+        const label = `${acc.name} (${acc.type === 'bank' ? 'Banka' : 'Kasa'})`;
+        selectTx.insertAdjacentHTML('beforeend', `<option value="${acc.id}">${label}</option>`);
+        targetSelect.insertAdjacentHTML('beforeend', `<option value="${acc.id}">${label}</option>`);
+        editAccount.insertAdjacentHTML('beforeend', `<option value="${acc.id}">${label}</option>`);
+        filterAcc.insertAdjacentHTML('beforeend', `<option value="${acc.id}">${acc.name}</option>`);
+      });
+
+      const txContact = document.getElementById('txContact');
+      const editContact = document.getElementById('editContact');
+      const filterContact = document.getElementById('filterContact');
+
+      txContact.innerHTML = '<option value="">Genel (Tanımsız)</option>';
+      editContact.innerHTML = '<option value="">Genel (Tanımsız)</option>';
+      filterContact.innerHTML = '<option value="all">Tüm Kişiler / Masraflar</option>';
+
+      contacts.forEach(c => {
+        const typeBadge = c.type === 'person' ? 'Personel' : (c.type === 'expense' ? 'Masraf' : 'Firma');
+        const opt = `<option value="${c.id}">${c.name} [${typeBadge}]</option>`;
+        txContact.insertAdjacentHTML('beforeend', opt);
+        editContact.insertAdjacentHTML('beforeend', opt);
+        filterContact.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`);
+      });
+    }
+
+    function renderSummary() {
+      let total = accounts.reduce((acc, a) => acc + (a.computedBalance || 0), 0);
+      document.getElementById('totalBalanceDisplay').innerText = formatCurrency(total);
+
+      const container = document.getElementById('accountsBalanceOverview');
+      container.innerHTML = '';
+
+      if (accounts.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-500 italic">Henüz tanımlı kasa veya banka bulunmuyor.</div>`;
+        return;
+      }
+
+      accounts.forEach(acc => {
+        const isBank = acc.type === 'bank';
+        const icon = isBank ? 'fa-building-columns text-sky-400' : 'fa-money-bill-wave text-amber-400';
+        const badgeBg = isBank ? 'bg-sky-500/10 text-sky-300 border-sky-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20';
+        const typeLabel = isBank ? 'Banka' : 'Nakit';
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs';
+        row.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0">
+            <i class="fa-solid ${icon} text-sm"></i>
+            <span class="font-medium text-slate-200 truncate">${acc.name}</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] border ${badgeBg}">${typeLabel}</span>
+          </div>
+          <div class="font-bold text-slate-100 whitespace-nowrap pl-2">
+            ${formatCurrency(acc.computedBalance)}
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function sortTable(column) {
+      if (currentSortColumn === column) {
+        currentSortAsc = !currentSortAsc;
+      } else {
+        currentSortColumn = column;
+        currentSortAsc = true;
+      }
+
+      ['date', 'account', 'contact', 'desc', 'amount'].forEach(col => {
+        const el = document.getElementById(`sortIcon_${col}`);
+        if (!el) return;
+        if (col === currentSortColumn) {
+          el.innerHTML = currentSortAsc ? '<i class="fa-solid fa-sort-up text-indigo-400"></i>' : '<i class="fa-solid fa-sort-down text-indigo-400"></i>';
+        } else {
+          el.innerHTML = '<i class="fa-solid fa-sort"></i>';
+        }
+      });
+
+      currentVisibleTransactions.sort((a, b) => {
+        let valA, valB;
+
+        if (column === 'date') {
+          valA = new Date(a.date);
+          valB = new Date(b.date);
+        } else if (column === 'account') {
+          valA = (accounts.find(x => x.id === a.account_id)?.name || '').toLowerCase();
+          valB = (accounts.find(x => x.id === b.account_id)?.name || '').toLowerCase();
+        } else if (column === 'contact') {
+          valA = (contacts.find(x => x.id === a.contact_id)?.name || '').toLowerCase();
+          valB = (contacts.find(x => x.id === b.contact_id)?.name || '').toLowerCase();
+        } else if (column === 'desc') {
+          valA = (a.description || '').toLowerCase();
+          valB = (b.description || '').toLowerCase();
+        } else if (column === 'amount') {
+          valA = parseFloat(a.amount);
+          valB = parseFloat(b.amount);
+        }
+
+        if (valA < valB) return currentSortAsc ? -1 : 1;
+        if (valA > valB) return currentSortAsc ? 1 : -1;
+        return 0;
+      });
+
+      renderTableRows(currentVisibleTransactions);
+    }
+
+    function renderTableRows(list) {
+      const tbody = document.getElementById('txTableBody');
+      tbody.innerHTML = '';
+
+      let totalIn = list.filter(t => t.type === 'in' || t.type === 'rollover').reduce((acc, t) => acc + parseFloat(t.amount), 0);
+      let totalOut = list.filter(t => t.type === 'out').reduce((acc, t) => acc + parseFloat(t.amount), 0);
+      document.getElementById('totalInDisplay').innerText = `+${formatCurrency(totalIn)}`;
+      document.getElementById('totalOutDisplay').innerText = `-${formatCurrency(totalOut)}`;
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500 text-xs">Filtrelere uygun hareket bulunamadı.</td></tr>`;
+        return;
+      }
+
+      list.forEach(tx => {
+        const account = accounts.find(a => a.id === tx.account_id) || { name: 'Silinmiş Hesap' };
+        const contact = contacts.find(c => c.id === tx.contact_id);
+        
+        let typeBadge = '';
+        let amountClass = '';
+
+        if (tx.type === 'in') {
+          typeBadge = '<span class="px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 font-medium">Giriş</span>';
+          amountClass = 'text-emerald-400 font-semibold';
+        } else if (tx.type === 'out') {
+          typeBadge = '<span class="px-2 py-0.5 rounded text-xs bg-rose-500/10 text-rose-400 font-medium">Çıkış</span>';
+          amountClass = 'text-rose-400 font-semibold';
+        } else {
+          typeBadge = '<span class="px-2 py-0.5 rounded text-xs bg-indigo-500/10 text-indigo-400 font-medium">Devir</span>';
+          amountClass = 'text-indigo-300 font-semibold';
+        }
+
+        const contactName = contact ? `<span class="px-2 py-0.5 rounded text-xs bg-slate-800 text-slate-200 border border-slate-700">${contact.name}</span>` : '<span class="text-slate-600 text-xs">-</span>';
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/30 transition";
+        tr.innerHTML = `
+          <td class="px-5 py-3 text-slate-300 whitespace-nowrap text-xs">${tx.date}</td>
+          <td class="px-5 py-3 whitespace-nowrap font-medium text-slate-200">${account.name}</td>
+          <td class="px-5 py-3 whitespace-nowrap">${contactName}</td>
+          <td class="px-5 py-3 whitespace-nowrap">${typeBadge}</td>
+          <td class="px-5 py-3 text-slate-400 max-w-xs truncate">${tx.description || '-'}</td>
+          <td class="px-5 py-3 text-right whitespace-nowrap ${amountClass}">
+            ${tx.type === 'out' ? '-' : '+'}${formatCurrency(tx.amount)}
+          </td>
+          <td class="px-5 py-3 text-center whitespace-nowrap">
+            <button onclick="openEditModal(${tx.id})" title="Düzenle" class="text-indigo-400 hover:text-indigo-300 px-2 py-1 transition">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button onclick="deleteTransaction(${tx.id})" title="Sil" class="text-rose-400 hover:text-rose-300 px-2 py-1 transition ml-1">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function handleTxTypeChange() {
+      const type = document.getElementById('txType').value;
+      const targetDiv = document.getElementById('txTargetAccountDiv');
+      const contactDiv = document.getElementById('txContactDiv');
+      const accountLabel = document.getElementById('txAccountLabel');
+
+      if (type === 'transfer') {
+        targetDiv.classList.remove('hidden');
+        contactDiv.classList.add('hidden');
+        accountLabel.innerText = "Kaynak Hesap (Çıkış)";
+      } else {
+        targetDiv.classList.add('hidden');
+        contactDiv.classList.remove('hidden');
+        accountLabel.innerText = "Hangi Kasa / Banka?";
+      }
+    }
+
+    document.getElementById('txForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const type = document.getElementById('txType').value;
+      const sourceId = parseInt(document.getElementById('txAccount').value);
+      const contactId = document.getElementById('txContact').value ? parseInt(document.getElementById('txContact').value) : null;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const date = document.getElementById('txDate').value;
+      const desc = document.getElementById('txDesc').value;
+
+      if (type === 'transfer') {
+        const targetId = parseInt(document.getElementById('txTargetAccount').value);
+        if (sourceId === targetId) {
+          alert('Kaynak ve hedef hesap aynı olamaz!');
+          return;
+        }
+
+        const sourceAcc = accounts.find(a => a.id === sourceId);
+        const targetAcc = accounts.find(a => a.id === targetId);
+
+        const records = [
+          { account_id: sourceId, type: 'out', amount: amount, date: date, description: `[Transfer -> ${targetAcc.name}] ${desc}`, contact_id: null },
+          { account_id: targetId, type: 'in', amount: amount, date: date, description: `[Transfer <- ${sourceAcc.name}] ${desc}`, contact_id: null }
+        ];
+
+        const { error } = await sbClient.from('transactions').insert(records);
+        if (error) alert("Hata: " + error.message);
+        else {
+          this.reset();
+          document.getElementById('txDate').valueAsDate = new Date();
+          handleTxTypeChange();
+          loadAllData();
+        }
+      } else {
+        const { error } = await sbClient.from('transactions').insert([{
+          account_id: sourceId,
+          contact_id: contactId,
+          type: type,
+          amount: amount,
+          date: date,
+          description: desc
+        }]);
+
+        if (error) alert("Hata: " + error.message);
+        else {
+          this.reset();
+          document.getElementById('txDate').valueAsDate = new Date();
+          loadAllData();
+        }
+      }
+    });
+
+    function applyFilters() {
+      const start = document.getElementById('filterStart').value;
+      const end = document.getElementById('filterEnd').value;
+      const accId = document.getElementById('filterAccount').value;
+      const conId = document.getElementById('filterContact').value;
+
+      currentVisibleTransactions = transactions.filter(t => {
+        let matchDate = true;
+        let matchAcc = true;
+        let matchCon = true;
+
+        if (start && t.date < start) matchDate = false;
+        if (end && t.date > end) matchDate = false;
+        if (accId !== 'all' && t.account_id !== parseInt(accId)) matchAcc = false;
+        if (conId !== 'all' && t.contact_id !== parseInt(conId)) matchCon = false;
+
+        return matchDate && matchAcc && matchCon;
+      });
+
+      renderTableRows(currentVisibleTransactions);
+    }
+
+    function clearFilters() {
+      document.getElementById('filterStart').value = '';
+      document.getElementById('filterEnd').value = '';
+      document.getElementById('filterAccount').value = 'all';
+      document.getElementById('filterContact').value = 'all';
+      currentVisibleTransactions = [...transactions];
+      renderTableRows(currentVisibleTransactions);
+    }
+
+    function exportToExcel() {
+      if (!currentVisibleTransactions || currentVisibleTransactions.length === 0) {
+        alert('İndirilecek hareket kaydı bulunamadı.');
+        return;
+      }
+
+      let csvContent = "\uFEFF";
+      csvContent += "Tarih;Kasa/Banka;Kişi/Masraf Merkezi;İşlem Türü;Açıklama;Tutar (TL)\n";
+
+      currentVisibleTransactions.forEach(tx => {
+        const acc = accounts.find(a => a.id === tx.account_id) || { name: 'Silinmiş' };
+        const con = contacts.find(c => c.id === tx.contact_id) || { name: 'Genel' };
+        let typeStr = tx.type === 'in' ? 'Giriş' : (tx.type === 'out' ? 'Çıkış' : 'Devir');
+        let amountFormatted = (tx.type === 'out' ? '-' : '+') + parseFloat(tx.amount).toFixed(2).replace('.', ',');
+        let descClean = `"${(tx.description || '').replace(/"/g, '""')}"`;
+        let conClean = `"${con.name.replace(/"/g, '""')}"`;
+
+        csvContent += `${tx.date};${acc.name};${conClean};${typeStr};${descClean};${amountFormatted}\n`;
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `kasa_raporu_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ==================== KASA & BANKALARI YÖNET ====================
+    function openManageAccountsModal() {
+      const container = document.getElementById('accountsList');
+      container.innerHTML = '';
+
+      accounts.forEach(acc => {
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-2xl";
+        div.innerHTML = `
+          <div>
+            <div class="text-sm font-semibold text-slate-200">${acc.name}</div>
+            <div class="text-xs text-slate-500">${acc.type === 'bank' ? 'Banka Hesabı' : 'Nakit Kasa'} — Bakiye: <span class="text-indigo-300 font-semibold">${formatCurrency(acc.computedBalance)}</span></div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="editAccountModal(${acc.id})" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1">
+              <i class="fa-solid fa-pen-to-square text-indigo-400"></i> Düzenle
+            </button>
+            <button onclick="deleteAccount(${acc.id})" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-2.5 py-1.5 rounded-xl border border-rose-500/20 transition">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('manageAccountsModal').classList.remove('hidden');
+    }
+
+    function closeManageAccountsModal() {
+      document.getElementById('manageAccountsModal').classList.add('hidden');
+    }
+
+    document.getElementById('modalAccountAddForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = document.getElementById('modalAccName').value.trim();
+      const type = document.getElementById('modalAccType').value;
+      const initial = parseFloat(document.getElementById('modalAccInitial').value) || 0;
+
+      const { data: newAcc, error } = await sbClient.from('accounts').insert([{ name, type }]).select().single();
+      if (error) {
+        alert("Hata: " + error.message);
+        return;
+      }
+
+      if (initial > 0 && newAcc) {
+        await sbClient.from('transactions').insert([{
+          account_id: newAcc.id,
+          type: 'rollover',
+          amount: initial,
+          date: new Date().toISOString().split('T')[0],
+          description: 'Açılış Devir Bakiyesi'
+        }]);
+      }
+
+      this.reset();
+      await loadAllData();
+      openManageAccountsModal();
+    });
+
+    async function editAccountModal(id) {
+      const acc = accounts.find(a => a.id === id);
+      if (!acc) return;
+
+      const newName = prompt('Yeni kasa/banka adını girin:', acc.name);
+      if (newName && newName.trim() !== '') {
+        const { error } = await sbClient.from('accounts').update({ name: newName.trim() }).eq('id', id);
+        if (error) alert("Hata: " + error.message);
+        else {
+          await loadAllData();
+          openManageAccountsModal();
+        }
+      }
+    }
+
+    async function deleteAccount(id) {
+      const acc = accounts.find(a => a.id === id);
+      if (!acc) return;
+      if (confirm(`"${acc.name}" hesabını ve geçmişe dönük tüm hareketlerini silmek istediğinize emin misiniz?`)) {
+        const { error } = await sbClient.from('accounts').delete().eq('id', id);
+        if (error) alert("Hata: " + error.message);
+        else {
+          await loadAllData();
+          openManageAccountsModal();
+        }
+      }
+    }
+
+    // ==================== CARİ / MASRAF YÖNETİMİ ====================
+    function openManageContactsModal() {
+      const container = document.getElementById('contactsList');
+      container.innerHTML = '';
+
+      contacts.forEach(c => {
+        const typeBadge = c.type === 'person' ? 'Personel' : (c.type === 'expense' ? 'Masraf' : 'Firma');
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-2.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs";
+        div.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-slate-200">${c.name}</span>
+            <span class="px-2 py-0.5 rounded-lg text-[10px] bg-slate-800 text-slate-400 border border-slate-700">${typeBadge}</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="editContactModal(${c.id})" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-xl border border-slate-700 transition flex items-center gap-1">
+              <i class="fa-solid fa-pen-to-square text-indigo-400"></i> Düzenle
+            </button>
+            <button onclick="deleteContact(${c.id})" class="text-rose-400 hover:text-rose-300 px-2 py-1 transition">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('manageContactsModal').classList.remove('hidden');
+    }
+
+    function closeManageContactsModal() {
+      document.getElementById('manageContactsModal').classList.add('hidden');
+    }
+
+    document.getElementById('contactForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = document.getElementById('contactName').value.trim();
+      const type = document.getElementById('contactType').value;
+
+      const { error } = await sbClient.from('contacts').insert([{ name, type }]);
+      if (error) alert("Hata: " + error.message);
+      else {
+        this.reset();
+        await loadAllData();
+        openManageContactsModal();
+      }
+    });
+
+    async function editContactModal(id) {
+      const con = contacts.find(c => c.id === id);
+      if (!con) return;
+
+      const newName = prompt('Yeni kişi / masraf merkezi adını girin:', con.name);
+      if (newName && newName.trim() !== '') {
+        const { error } = await sbClient.from('contacts').update({ name: newName.trim() }).eq('id', id);
+        if (error) alert("Hata: " + error.message);
+        else {
+          await loadAllData();
+          openManageContactsModal();
+        }
+      }
+    }
+
+    async function deleteContact(id) {
+      if (confirm('Bu cariyi silmek istediğinize emin misiniz?')) {
+        const { error } = await sbClient.from('contacts').delete().eq('id', id);
+        if (error) alert("Hata: " + error.message);
+        else {
+          await loadAllData();
+          openManageContactsModal();
+        }
+      }
+    }
+
+    // ==================== HAREKET DÜZENLEME & SİLME ====================
+    function openEditModal(id) {
+      const tx = transactions.find(t => t.id === id);
+      if (!tx) return;
+
+      document.getElementById('editTxId').value = tx.id;
+      document.getElementById('editAccount').value = tx.account_id;
+      document.getElementById('editContact').value = tx.contact_id || '';
+      document.getElementById('editType').value = tx.type;
+      document.getElementById('editAmount').value = tx.amount;
+      document.getElementById('editDate').value = tx.date;
+      document.getElementById('editDesc').value = tx.description || '';
+
+      document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.add('hidden');
+    }
+
+    document.getElementById('editForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const id = parseInt(document.getElementById('editTxId').value);
+      const conVal = document.getElementById('editContact').value;
+      
+      const updatedData = {
+        account_id: parseInt(document.getElementById('editAccount').value),
+        contact_id: conVal ? parseInt(conVal) : null,
+        type: document.getElementById('editType').value,
+        amount: parseFloat(document.getElementById('editAmount').value),
+        date: document.getElementById('editDate').value,
+        description: document.getElementById('editDesc').value
+      };
+
+      const { error } = await sbClient.from('transactions').update(updatedData).eq('id', id);
+      if (error) alert("Hata: " + error.message);
+      else {
+        closeEditModal();
+        loadAllData();
+      }
+    });
+
+    async function deleteTransaction(id) {
+      if (confirm('Bu işlemi silmek istediğinize emin misiniz?')) {
+        const { error } = await sbClient.from('transactions').delete().eq('id', id);
+        if (error) alert("Hata: " + error.message);
+        else loadAllData();
+      }
+    }
+
+    // ==================== KULLANICI ŞİFRE DEĞİŞTİRME ====================
+    function openPasswordChangeModal() {
+      document.getElementById('currentPassInput').value = '';
+      document.getElementById('newPassInput').value = '';
+      document.getElementById('confirmPassInput').value = '';
+      document.getElementById('updatePinInput').value = '';
+      document.getElementById('pwdChangeError').classList.add('hidden');
+      document.getElementById('passwordChangeModal').classList.remove('hidden');
+    }
+
+    function closePasswordChangeModal() {
+      document.getElementById('passwordChangeModal').classList.add('hidden');
+    }
+
+    document.getElementById('userPasswordForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const currentPass = document.getElementById('currentPassInput').value.trim();
+      const newPass = document.getElementById('newPassInput').value.trim();
+      const confirmPass = document.getElementById('confirmPassInput').value.trim();
+      const updatePin = document.getElementById('updatePinInput').value.trim();
+      const errorEl = document.getElementById('pwdChangeError');
+
+      errorEl.classList.add('hidden');
+
+      if (currentPass !== currentUser.password) {
+        errorEl.querySelector('span').innerText = 'Mevcut şifrenizi yanlış girdiniz!';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      if (newPass.length < 4) {
+        errorEl.querySelector('span').innerText = 'Yeni şifre en az 4 karakter olmalıdır.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      if (newPass !== confirmPass) {
+        errorEl.querySelector('span').innerText = 'Yeni şifreler birbiriyle eşleşmiyor!';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      if (updatePin && (updatePin.length !== 4 || isNaN(updatePin))) {
+        errorEl.querySelector('span').innerText = 'PIN kodu tam 4 haneli bir rakam olmalıdır.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      const updateData = { password: newPass };
+      if (updatePin) updateData.pin_code = updatePin;
+
+      try {
+        await sbClient.from('app_users').update(updateData).eq('username', currentUser.username);
+      } catch(e) {}
+
+      currentUser.password = newPass;
+      if (updatePin) currentUser.pin_code = updatePin;
+
+      if (localStorage.getItem('kp_current_user')) {
+        localStorage.setItem('kp_current_user', JSON.stringify(currentUser));
+      } else {
+        sessionStorage.setItem('kp_current_user', JSON.stringify(currentUser));
+      }
+
+      alert('Giriş şifreniz başarıyla güncellendi!');
+      closePasswordChangeModal();
+    });
+
+    checkSavedSession();
+  </script>
+</body>
+</html>
